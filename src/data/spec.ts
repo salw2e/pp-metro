@@ -73,7 +73,7 @@ export const STATIONS: StationSpec[] = [
   { id: 'olympic', en: 'Olympic', km: 'អូឡាំពិក', at: [11.5524, 104.9025], why: 'Junction of Monireth, Mao Tse Toung and Preah Sihanouk Boulevards, about 700 m from the National Olympic Stadium. Interchange between Lines 3 and 4.' },
   { id: 'independence', en: 'Independence Monument', km: 'វិមានឯករាជ្យ', at: [11.5561, 104.9298], why: 'Independence Monument, Norodom Boulevard and the government and embassy district. Heritage setting requires careful entrance design.' },
   { id: 'kohpich', en: 'Koh Pich', km: 'កោះពេជ្រ', at: [11.5474, 104.94], why: 'Koh Pich (Diamond Island) exhibition, commercial and residential district.' },
-  { id: 'chbarampov', en: 'Chbar Ampov', km: 'ច្បារអំពៅ', at: [11.531, 104.944], why: 'Chbar Ampov market on National Road 1, east of the Bassac. Khan Chbar Ampov had about 164,000 residents in 2019.' },
+  { id: 'chbarampov', en: 'Chbar Ampov', km: 'ច្បារអំពៅ', at: [11.5316, 104.9497], why: 'Chbar Ampov market on National Road 1, east of the Bassac. Khan Chbar Ampov had about 164,000 residents in 2019.' },
   { id: 'kohnorea', en: 'Koh Norea', km: 'កោះនរា', at: [11.5389, 104.9625], why: 'Koh Norea reclaimed island development, reached from National Road 1.' },
   { id: 'vealsbov', en: 'Veal Sbov', km: 'វាលស្បូវ', at: [11.5333, 104.978], why: 'Eastern terminus near the Veal Sbov bus station on National Road 1, intercepting traffic from Kien Svay.' },
   // Line 4
@@ -123,7 +123,7 @@ export const LINES: LineSpec[] = [
       { type: 'underground', via: 'road', prefer: 'Russian' },
       { type: 'underground', via: 'road', prefer: 'Russian' },
       { type: 'underground', via: 'road', prefer: 'Russian' },
-      { type: 'underground', via: 'road', prefer: 'Russian' },
+      { type: 'underground', via: 'direct', note: 'Under Kampuchea Krom Boulevard' },
       { type: 'underground', via: 'direct', note: 'Under Kampuchea Krom Boulevard' },
       { type: 'underground', via: 'direct', note: 'Bored under city blocks; building foundations must be surveyed' },
       { type: 'underground', via: 'direct', note: 'Bored tunnel under the Tonle Sap' },

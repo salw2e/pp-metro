@@ -107,7 +107,7 @@ export function resample(coords: LngLat[], step: number): LngLat[] {
  * Replaces each corner of a polyline with a circular arc of the given radius. The radius is reduced where the
  * neighbouring straights are too short to hold the full arc; the radius actually used is reported per corner.
  */
-export function filletPolyline(coords: LngLat[], radius: number, arcStep = 10) {
+export function filletPolyline(coords: LngLat[], radius: number, arcStep = 10, capT: (i: number) => number = () => Infinity) {
   const pr = projector(coords[0][1]);
   const pts = coords.map(pr.fwd).filter((p, i, a) => i === 0 || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 0.5);
   const out: [number, number][] = [pts[0]];
@@ -126,7 +126,7 @@ export function filletPolyline(coords: LngLat[], radius: number, arcStep = 10) {
     if (turn < 1e-3) { out.push([bx, by]); consumed = 0; continue; }
     const half = Math.tan(turn / 2);
     // the arc may use what is left of the incoming straight and at most half of the outgoing one
-    const maxT = Math.min(l1 - consumed, l2 / 2);
+    const maxT = Math.min(l1 - consumed, l2 / 2, capT(i));
     const r = Math.min(radius, Math.max(0, maxT) / half);
     const T = r * half;
     used.push(r);
@@ -189,6 +189,42 @@ export function removeSpikes(coords: LngLat[], maxTurnDeg = 100): LngLat[] {
     }
   }
   return pts;
+}
+
+/**
+ * Gives each station that sits on a bend a straight platform: the bend vertex is replaced by two vertices 150 m
+ * either side along the bisector. Returns the new line and the indices of vertices that end a platform.
+ */
+export function addPlatforms(coords: LngLat[], stations: LngLat[], half = 150, near = 60) {
+  const pr = projector(coords[0][1]);
+  let pts = coords.map(pr.fwd);
+  const ends = new Set<string>();
+  for (const st of stations) {
+    const S = pr.fwd(st);
+    let v = -1;
+    let best = near;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = Math.hypot(pts[i][0] - S[0], pts[i][1] - S[1]);
+      if (d < best) { best = d; v = i; }
+    }
+    if (v < 0) continue;
+    const [A, V, C] = [pts[v - 1], pts[v], pts[v + 1]];
+    const l1 = Math.hypot(V[0] - A[0], V[1] - A[1]);
+    const l2 = Math.hypot(C[0] - V[0], C[1] - V[1]);
+    if (l1 < half + 20 || l2 < half + 20) continue;
+    const u1 = [(V[0] - A[0]) / l1, (V[1] - A[1]) / l1];
+    const u2 = [(C[0] - V[0]) / l2, (C[1] - V[1]) / l2];
+    if (u1[0] * u2[0] + u1[1] * u2[1] > Math.cos((3 * Math.PI) / 180)) continue;
+    const bx = u1[0] + u2[0];
+    const by = u1[1] + u2[1];
+    const bl = Math.hypot(bx, by) || 1;
+    const P1: [number, number] = [V[0] - (bx / bl) * half, V[1] - (by / bl) * half];
+    const P2: [number, number] = [V[0] + (bx / bl) * half, V[1] + (by / bl) * half];
+    pts.splice(v, 1, P1, P2);
+    ends.add(`${P1[0]},${P1[1]}`).add(`${P2[0]},${P2[1]}`);
+  }
+  const isEnd = pts.map(p => ends.has(`${p[0]},${p[1]}`));
+  return { coords: pts.map(pr.inv), isEnd };
 }
 
 /** Merges interior vertices closer than `minLen` metres into their midpoint so that every corner has room for an arc. */

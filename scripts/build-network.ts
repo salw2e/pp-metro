@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import { STATIONS, LINES, EXTENSIONS, type Construction, type Routing } from '../src/data/spec.ts';
 import {
-  type LngLat, haversine, lineLength, filletPolyline, simplifyMetres, nearestOnLine, resample, pointInPolygon, minRadius, removeSpikes, mergeClose,
+  type LngLat, haversine, lineLength, filletPolyline, simplifyMetres, nearestOnLine, resample, pointInPolygon, minRadius, removeSpikes, mergeClose, addPlatforms,
 } from '../src/lib/geo.ts';
 
 const root = new URL('..', import.meta.url);
@@ -278,6 +278,7 @@ const uses = new Map<string, StationUse[]>();
 const stationPos = new Map<string, { p: LngLat; snapM: number }>();
 
 const debug: any[] = [];
+const platformR = new Map<string, number>();
 const lines = LINES.map(line => {
   const targets = line.stations.map(id => lngLat(stationById.get(id)!.at));
   let raw: LngLat[] = [];
@@ -294,13 +295,15 @@ const lines = LINES.map(line => {
   const simple = line.radius ? removeSpikes(mergeClose(removeSpikes(simplifyMetres(removeSpikes(raw, 120), 40), 100), 150), 100) : simplifyMetres(raw, 4);
   debug.push({ type: 'Feature', properties: { line: line.id, kind: 'raw' }, geometry: { type: 'LineString', coordinates: raw } });
   debug.push(...targets.map((t, i) => ({ type: 'Feature', properties: { line: line.id, kind: 'target', id: line.stations[i] }, geometry: { type: 'Point', coordinates: t } })));
-  const { coords, radii } = line.radius ? filletPolyline(simple, line.radius) : { coords: simple, radii: [] as number[] };
+  const plat = line.radius ? addPlatforms(simple, targets) : { coords: simple, isEnd: simple.map(() => false) };
+  // a platform end may only give 75 m of the 300 m straight to its curve, keeping 150 m straight for the platform
+  const { coords, radii } = line.radius ? filletPolyline(plat.coords, line.radius, 10, i => (plat.isEnd[i] ? 75 : Infinity)) : { coords: simple, radii: [] as number[] };
   if (line.radius) {
     // report where the design radius could not be achieved
     let k = 0;
-    for (let i = 1; i < simple.length - 1; i++) {
+    for (let i = 1; i < plat.coords.length - 1; i++) {
       const r = radii[k++];
-      if (r !== undefined && r < line.radius - 1 && r > 1) warnings.push(`${line.id} curve R ${Math.round(r)} m at ${simple[i][1].toFixed(5)},${simple[i][0].toFixed(5)}`);
+      if (r !== undefined && r < line.radius - 1 && r > 1) warnings.push(`${line.id} curve R ${Math.round(r)} m at ${plat.coords[i][1].toFixed(5)},${plat.coords[i][0].toFixed(5)}`);
     }
   }
 
@@ -321,7 +324,14 @@ const lines = LINES.map(line => {
     lengthM: Math.round(lineLength(pieces[i])),
     coords: pieces[i].map(round),
   }));
+  const totalLen = lineLength(coords);
   line.stations.forEach((id, i) => {
+    // radius over a 150 m platform centred on the station (ends clipped at terminals)
+    const c0 = Math.max(0, along[i] - 75);
+    const c1 = Math.min(totalLen, along[i] + 75);
+    const plat = splitAt(coords, [c0, c1])[0];
+    const platR = plat.length > 2 ? minRadius(plat, 25) : Infinity;
+    platformR.set(`${line.id}:${id}`, platR);
     const adj = [line.segments[i - 1]?.type, line.segments[i]?.type].filter(Boolean) as Construction[];
     const type: Construction = adj.includes('underground') ? 'underground' : adj.includes('elevated') ? 'elevated' : 'surface';
     if (!uses.has(id)) uses.set(id, []);
@@ -368,7 +378,12 @@ const stations = STATIONS.map(s => {
     interchange: new Set(u.map(x => x.line)).size > 1,
     terminal: u.some(x => x.index === 0 || x.index === LINES.find(l => l.id === x.line)!.stations.length - 1),
     district, neighbourhoods: neighbourhoods(p), landmarks, transport,
-    flags: { nearRiver: nearWater, heritage },
+    flags: {
+      nearRiver: nearWater,
+      heritage,
+      // a platform needs straight track; under 1,000 m radius the station box must move in design
+      platformOnCurve: u.filter(x => (platformR.get(`${x.line}:${s.id}`) ?? Infinity) < 1000).map(x => x.line),
+    },
     why: s.why,
   };
 });
@@ -394,6 +409,6 @@ for (const l of lines) {
   console.log(`${l.id} ${(l.lengthM / 1000).toFixed(1)} km  U ${(l.byType.underground / 1000).toFixed(1)} E ${(l.byType.elevated / 1000).toFixed(1)} S ${(l.byType.surface / 1000).toFixed(1)}  spacing ${l.stationSpacingM.min}-${l.stationSpacingM.max}  minR ${l.curves?.minRadiusM ?? '-'} (${l.curves?.belowTarget ?? 0} below) measured ${l.curves?.measuredMinRadiusM ?? '-'}  rivers ${l.riverCrossings.map(c => `${c.river} ${c.lengthM}m ${c.segmentType}`).join('; ')}`);
 }
 for (const s of stations) if (s.snapM > 60) console.log(`station ${s.id} moved ${s.snapM} m`);
-for (const s of stations) if (!s.district) console.log(`station ${s.id} outside the capital`);
+for (const s of stations) if (s.flags.platformOnCurve.length) console.log(`station ${s.id} platform on curve (${s.flags.platformOnCurve.join(',')})`);
 for (const x of extensions) console.log(`${x.id} ${(x.lengthM / 1000).toFixed(1)} km`);
 for (const w of warnings) console.log('WARN', w);
