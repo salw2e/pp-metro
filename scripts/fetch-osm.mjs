@@ -14,6 +14,7 @@ const QUERIES = {
   railways: `way["railway"~"^(rail|disused|abandoned|construction)$"](${BBOX}); out geom;`,
   water: `(way["natural"="water"]["water"="river"](${BBOX}); rel["natural"="water"]["water"="river"](${BBOX}); way["waterway"="riverbank"](${BBOX});); out geom;`,
   bridges: `way["bridge"="yes"]["highway"~"^(motorway|trunk|primary|secondary)$"](${BBOX}); out geom;`,
+  roads: `way["highway"~"^(motorway|trunk|primary|secondary)$"](${BBOX}); out geom;`,
   places: `(
     nwr["amenity"~"^(university|hospital|marketplace|bus_station)$"]["name"](${BBOX});
     nwr["shop"="mall"]["name"](${BBOX});
@@ -105,6 +106,11 @@ for (const [name, q] of Object.entries(QUERIES)) {
     }));
   }
   if (name === 'districts') fc.features = fc.features.filter(f => /Polygon/.test(f.geometry?.type));
-  write(name, fc, name === 'districts' ? 0.00015 : 0.00008);
+  if (name === 'roads') {
+    // routing needs every junction node, so roads stay unsimplified and outside public/
+    fs.mkdirSync(new URL('../data/raw/', import.meta.url), { recursive: true });
+    fs.writeFileSync(new URL('../data/raw/roads.geojson', import.meta.url), JSON.stringify(fc));
+    console.log(`roads: ${fc.features.length} features (data/raw)`);
+  } else write(name, fc, name === 'districts' ? 0.00015 : 0.00008);
   await new Promise(r => setTimeout(r, 3000));
 }

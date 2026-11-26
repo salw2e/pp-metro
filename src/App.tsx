@@ -1,122 +1,21 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useRef } from 'react'
+import maplibregl from './map/maplibre.ts'
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+export default function App() {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const map = new maplibregl.Map({ container: ref.current!, style: 'https://tiles.openfreemap.org/styles/positron', center: [104.91, 11.55], zoom: 11 })
+    ;(window as any).__map = map
+    map.on('load', async () => {
+      const dbg = await (await fetch(import.meta.env.BASE_URL + 'data/_debug.geojson')).json()
+      map.addSource('dbg', { type: 'geojson', data: dbg })
+      map.addLayer({ id: 'raw', type: 'line', source: 'dbg', filter: ['==', ['get', 'kind'], 'raw'], paint: { 'line-color': ['match', ['get', 'line'], 'L1', '#C8102E', 'L2', '#0057B8', 'L3', '#00843D', 'L4', '#E87722', '#6E3FA3'], 'line-width': 5, 'line-opacity': 0.35 } })
+      map.addLayer({ id: 'fin', type: 'line', source: 'dbg', filter: ['==', ['get', 'kind'], 'final'], paint: { 'line-color': '#000', 'line-width': 1.5 } })
+      map.addLayer({ id: 'tg', type: 'circle', source: 'dbg', filter: ['==', ['get', 'kind'], 'target'], paint: { 'circle-radius': 4, 'circle-color': '#000' } })
+      map.addLayer({ id: 'tgl', type: 'symbol', source: 'dbg', filter: ['==', ['get', 'kind'], 'target'], layout: { 'text-field': ['get', 'id'], 'text-size': 11, 'text-offset': [0, 1], 'text-font': ['Noto Sans Regular'] } })
+      ;(window as any).__ready = true
+    })
+    return () => map.remove()
+  }, [])
+  return <div ref={ref} style={{ position: 'fixed', inset: 0 }} />
 }
-
-export default App
