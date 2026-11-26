@@ -12,6 +12,7 @@ export interface Station {
   lat: number
   lng: number
   snapM: number
+  platformOffsetM: number
   lines: string[]
   codes: string[]
   types: Construction[]

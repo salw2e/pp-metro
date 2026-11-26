@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "data:osm": "node scripts/fetch-osm.mjs",
+    "data:network": "tsx scripts/build-network.ts",
+    "typecheck": "tsc -b",
+    "test": "tsx --test tests/unit/*.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

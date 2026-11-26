@@ -280,7 +280,8 @@ function neighbourhoods(p: LngLat) {
 // ---------- lines ----------
 type StationUse = { line: string; code: string; type: Construction; index: number };
 const uses = new Map<string, StationUse[]>();
-const stationPos = new Map<string, { p: LngLat; snapM: number }>();
+const perLine = new Map<string, { p: LngLat; snapM: number }[]>();
+const stationPos = new Map<string, { p: LngLat; snapM: number; offsetM: number }>();
 
 const debug: any[] = [];
 const platformR = new Map<string, number>();
@@ -316,8 +317,8 @@ const lines = LINES.map(line => {
   const along = targets.map((t, i) => {
     const n = nearestOnLine(t, coords, last + (i ? 200 : 0));
     last = n.along;
-    const prev = stationPos.get(line.stations[i]);
-    if (!prev || n.dist < prev.snapM) stationPos.set(line.stations[i], { p: n.point, snapM: n.dist });
+    if (!perLine.has(line.stations[i])) perLine.set(line.stations[i], [])
+    perLine.get(line.stations[i])!.push({ p: n.point, snapM: n.dist });
     return n.along;
   });
   for (let i = 1; i < along.length; i++) if (along[i] <= along[i - 1]) warnings.push(`${line.id}: station ${line.stations[i]} is out of order along the alignment`);
@@ -363,6 +364,14 @@ const lines = LINES.map(line => {
   };
 });
 
+// an interchange sits at the centre of its platforms on each line; the platform offset is reported
+for (const [id, pts] of perLine) {
+  const p: LngLat = [pts.reduce((a, x) => a + x.p[0], 0) / pts.length, pts.reduce((a, x) => a + x.p[1], 0) / pts.length];
+  let offsetM = 0;
+  for (const a of pts) for (const b of pts) offsetM = Math.max(offsetM, haversine(a.p, b.p));
+  stationPos.set(id, { p, snapM: Math.min(...pts.map(x => x.snapM)), offsetM });
+}
+
 // ---------- stations ----------
 const stations = STATIONS.map(s => {
   const pos = stationPos.get(s.id);
@@ -379,6 +388,7 @@ const stations = STATIONS.map(s => {
     id: s.id, en: s.en, km: s.km,
     lat: +p[1].toFixed(6), lng: +p[0].toFixed(6),
     snapM: Math.round(pos.snapM),
+    platformOffsetM: Math.round(pos.offsetM),
     lines: u.map(x => x.line), codes: u.map(x => x.code), types: u.map(x => x.type),
     interchange: new Set(u.map(x => x.line)).size > 1,
     terminal: u.some(x => x.index === 0 || x.index === LINES.find(l => l.id === x.line)!.stations.length - 1),
@@ -414,6 +424,7 @@ for (const l of lines) {
   console.log(`${l.id} ${(l.lengthM / 1000).toFixed(1)} km  U ${(l.byType.underground / 1000).toFixed(1)} E ${(l.byType.elevated / 1000).toFixed(1)} S ${(l.byType.surface / 1000).toFixed(1)}  spacing ${l.stationSpacingM.min}-${l.stationSpacingM.max}  minR ${l.curves?.minRadiusM ?? '-'} (${l.curves?.belowTarget ?? 0} below) measured ${l.curves?.measuredMinRadiusM ?? '-'}  rivers ${l.riverCrossings.map(c => `${c.river} ${c.lengthM}m ${c.segmentType}`).join('; ')}`);
 }
 for (const s of stations) if (s.snapM > 60) console.log(`station ${s.id} moved ${s.snapM} m`);
+for (const s of stations) if (s.platformOffsetM > 20) console.log(`station ${s.id} platforms ${s.platformOffsetM} m apart`);
 for (const s of stations) if (s.flags.platformOnCurve.length) console.log(`station ${s.id} platform on curve (${s.flags.platformOnCurve.join(',')})`);
 for (const x of extensions) console.log(`${x.id} ${(x.lengthM / 1000).toFixed(1)} km`);
 for (const w of warnings) console.log('WARN', w);
