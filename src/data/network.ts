@@ -1,4 +1,4 @@
-import raw from './network.json'
+import raw from './network.json' with { type: 'json' }
 
 export type Construction = 'underground' | 'elevated' | 'surface'
 export type LngLat = [number, number]

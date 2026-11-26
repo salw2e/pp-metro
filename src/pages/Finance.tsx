@@ -118,8 +118,8 @@ export function FinancePage() {
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="grid gap-4 md:grid-cols-2 content-start">
+      <div className="grid gap-6 grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="grid gap-4 grid-cols-[minmax(0,1fr)] md:grid-cols-2 content-start min-w-0">
           <Group title="Quantities (from the network geometry)">
             <Field label="Underground length" unit="km" step={0.1} value={inp.undergroundKm} onChange={set('undergroundKm')} />
             <Field label="Elevated length" unit="km" step={0.1} value={inp.elevatedKm} onChange={set('elevatedKm')} />

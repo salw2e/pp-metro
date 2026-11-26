@@ -1,32 +1,39 @@
-# React + TypeScript + Vite
+# Phnom Penh Metropolitan Rail Master Plan 2050
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+An independent, citizen-led preliminary proposal for a rail network in Phnom Penh, published as a website with an interactive map, station directory, cost tool, implementation scenario and a Khmer submission letter. It is not an official plan.
 
-Currently, two official plugins are available:
+Live: https://justsal.xyz/metro/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Run it
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `tsrs` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+pnpm install
+pnpm dev            # http://localhost:5173/metro/
+pnpm build          # static site in dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Node 20 or newer and pnpm. The build is plain static files; see [docs/deploy.md](docs/deploy.md) for nginx, other hosts and the base path.
+
+## Tests
+
+```
+pnpm test           # unit tests: geometry, network checks, cost model
+pnpm test:e2e       # Playwright in Chrome: every page at 7 screen sizes, map gestures, search, layers, downloads, print
+```
+
+## Data
+
+Roads, railways, rivers, bridges, districts and landmarks come from OpenStreetMap (ODbL). The alignments are routed on that geometry by `scripts/build-network.ts`, which also measures lengths, curve radii, river crossings and station positions. See [docs/data.md](docs/data.md).
+
+```
+pnpm data:osm       # download the OpenStreetMap extract
+pnpm data:network   # rebuild src/data/network.json from src/data/spec.ts
+```
+
+## Map providers
+
+Base maps use OpenFreeMap vector tiles (no key) and Esri World Imagery for satellite. Both can be replaced in `.env`; see `.env.example`. If the vector style cannot load, the map falls back to OpenStreetMap raster tiles and says so.
+
+## Status
+
+Every alignment, station position, cost and date is preliminary. Station coordinates are a desk study and have not been checked on site. Sources and data gaps are listed on the References page.

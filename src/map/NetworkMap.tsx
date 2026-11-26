@@ -396,7 +396,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
   }
 
   return (
-    <div ref={wrap} className="absolute inset-0 flex bg-white">
+    <div ref={wrap} className="absolute inset-0 flex bg-white sheet-offset">
       <aside className="hidden lg:flex flex-col w-[360px] shrink-0 border-r border-line bg-white min-h-0">
         <div className="p-4 border-b border-line"><SearchBox onPick={pickSearch} /></div>
         <div className="flex-1 overflow-y-auto p-4">{panelBody}</div>

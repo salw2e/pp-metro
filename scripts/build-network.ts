@@ -283,7 +283,6 @@ const uses = new Map<string, StationUse[]>();
 const perLine = new Map<string, { p: LngLat; snapM: number }[]>();
 const stationPos = new Map<string, { p: LngLat; snapM: number; offsetM: number }>();
 
-const debug: any[] = [];
 const platformR = new Map<string, number>();
 const lines = LINES.map(line => {
   const targets = line.stations.map(id => lngLat(stationById.get(id)!.at));
@@ -299,8 +298,6 @@ const lines = LINES.map(line => {
   }
   // a metro alignment follows the street corridor, not each carriageway: simplify to 40 m and drop reversals
   const simple = line.radius ? removeSpikes(mergeClose(removeSpikes(simplifyMetres(removeSpikes(raw, 120), 40), 100), 150), 100) : simplifyMetres(raw, 4);
-  debug.push({ type: 'Feature', properties: { line: line.id, kind: 'raw' }, geometry: { type: 'LineString', coordinates: raw } });
-  debug.push(...targets.map((t, i) => ({ type: 'Feature', properties: { line: line.id, kind: 'target', id: line.stations[i] }, geometry: { type: 'Point', coordinates: t } })));
   const plat = line.radius ? addPlatforms(simple, targets) : { coords: simple, isEnd: simple.map(() => false) };
   // a platform end may only give 75 m of the 300 m straight to its curve, keeping 150 m straight for the platform
   const { coords, radii } = line.radius ? filletPolyline(plat.coords, line.radius, 10, i => (plat.isEnd[i] ? 75 : Infinity)) : { coords: simple, radii: [] as number[] };
@@ -323,7 +320,6 @@ const lines = LINES.map(line => {
   });
   for (let i = 1; i < along.length; i++) if (along[i] <= along[i - 1]) warnings.push(`${line.id}: station ${line.stations[i]} is out of order along the alignment`);
 
-  debug.push({ type: 'Feature', properties: { line: line.id, kind: 'final' }, geometry: { type: 'LineString', coordinates: coords } });
   const pieces = splitAt(coords, along);
   const segments = line.segments.map((s, i) => ({
     from: line.stations[i], to: line.stations[i + 1], type: s.type, note: s.note ?? null,
@@ -418,7 +414,6 @@ const network = {
   lines, stations, extensions,
 };
 fs.writeFileSync(new URL('src/data/network.json', root), JSON.stringify(network));
-fs.writeFileSync(new URL('public/data/_debug.geojson', root), JSON.stringify({ type: 'FeatureCollection', features: debug }));
 
 for (const l of lines) {
   console.log(`${l.id} ${(l.lengthM / 1000).toFixed(1)} km  U ${(l.byType.underground / 1000).toFixed(1)} E ${(l.byType.elevated / 1000).toFixed(1)} S ${(l.byType.surface / 1000).toFixed(1)}  spacing ${l.stationSpacingM.min}-${l.stationSpacingM.max}  minR ${l.curves?.minRadiusM ?? '-'} (${l.curves?.belowTarget ?? 0} below) measured ${l.curves?.measuredMinRadiusM ?? '-'}  rivers ${l.riverCrossings.map(c => `${c.river} ${c.lengthM}m ${c.segmentType}`).join('; ')}`);

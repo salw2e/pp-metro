@@ -3,7 +3,9 @@ import { useLang } from '../i18n'
 import { Link, href } from '../router'
 import { LineMark, Stat, SectionTitle, Note } from '../components/ui'
 import { Cite } from '../components/Cite'
-import { PreviewMap } from '../map/PreviewMap'
+import { lazy, Suspense } from 'react'
+
+const PreviewMap = lazy(() => import('../map/PreviewMap').then(m => ({ default: m.PreviewMap })))
 import { scenarioTotals, bn } from '../lib/scenario'
 
 export function SummaryPage() {
@@ -30,7 +32,7 @@ export function SummaryPage() {
         <Stat value={`${km(m.underground)} km`} label={kmText ? 'ក្រោមដី' : 'Underground'} />
         <Stat value={num(m.stations)} label={kmText ? 'ស្ថានីយ៍រថភ្លើងថ្មី' : 'Metro stations'} sub={kmText ? `${num(m.interchanges)} ស្ថានីយ៍ប្តូរខ្សែ` : `${m.interchanges} interchanges`} />
         <Stat value={`${km(rail.lengthM)} km`} label={kmText ? 'រថភ្លើងលើផ្លូវដែកមានស្រាប់' : 'Commuter rail on existing track'} />
-        <Stat value={`${bn(cost.low.real)} to ${bn(cost.high.real)}`} label={kmText ? 'ប៉ាន់ស្មានតម្លៃ (ពាន់លានដុល្លារ តម្លៃឆ្នាំ២០២៦)' : 'Capital cost, US$ bn (2026 prices)'} sub={kmText ? 'ការប៉ាន់ស្មានបឋម' : `Base case ${bn(cost.base.real)}; preliminary`} />
+        <Stat value={`${bn(cost.low.real)} ${kmText ? 'ដល់' : 'to'} ${bn(cost.high.real)}`} label={kmText ? 'ប៉ាន់ស្មានតម្លៃ (ពាន់លានដុល្លារ តម្លៃឆ្នាំ២០២៦)' : 'Capital cost, US$ bn (2026 prices)'} sub={kmText ? 'ការប៉ាន់ស្មានបឋម' : `Base case ${bn(cost.base.real)}; preliminary`} />
         <Stat value="2050" label={kmText ? 'ឆ្នាំគោលដៅនៃសេណារីយ៉ូ' : 'Scenario horizon'} sub={kmText ? 'មិនមែនជាការប្តេជ្ញាផ្លូវការ' : 'Conditional, not a commitment'} />
       </div>
 
@@ -56,7 +58,7 @@ export function SummaryPage() {
             results of the official study.
           </p>
         </div>
-        <PreviewMap height={420} />
+        <Suspense fallback={<div className="border border-line bg-panel" style={{ height: 420 }} />}><PreviewMap height={420} /></Suspense>
       </div>
 
       <SectionTitle>{kmText ? 'បណ្តាញដែលបានស្នើ' : 'Proposed network'}</SectionTitle>

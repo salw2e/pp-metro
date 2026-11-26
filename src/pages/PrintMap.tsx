@@ -15,7 +15,7 @@ function Sheet() {
         <span className="text-[13px] text-muted">A3 landscape network map. Use the browser print dialog with "Background graphics" enabled.</span>
         <Button variant="primary" onClick={() => print()}><Printer size={15} aria-hidden="true" />{t('common.print')}</Button>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_330px] gap-4 p-4" style={{ minHeight: '90vh' }}>
+      <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_330px] print:grid-cols-[minmax(0,1fr)_330px] gap-4 p-4" style={{ minHeight: '90vh' }}>
         <div className="flex flex-col min-w-0">
           <div className="border-b-2 border-navy-900 pb-2 mb-3">
             <h1 className="text-[22px] font-semibold text-navy-900 leading-tight">{t('title')}</h1>

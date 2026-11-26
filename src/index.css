@@ -52,6 +52,9 @@ button:disabled { cursor: default; }
 .prose-report li { margin: 0 0 6px; }
 .prose-report a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
 
+/* absolutely positioned children (screen-reader labels) must not escape a scroll container */
+.overflow-x-auto { position: relative; }
+
 /* tables */
 .tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tbl th, .tbl td { padding: 8px 12px; border-bottom: 1px solid var(--color-line); text-align: left; vertical-align: top; }
@@ -68,6 +71,8 @@ button:disabled { cursor: default; }
 .maplibregl-popup-content { border-radius: var(--radius-sm); padding: 8px 10px; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); font-family: var(--font-sans); font-size: 13px; line-height: 1.45; }
 html[lang="km"] .maplibregl-popup-content { font-family: var(--font-khmer); }
 .maplibregl-ctrl-attrib { font-size: 11px; }
+/* keep scale, zoom and attribution above the collapsed bottom sheet on phones and tablets */
+@media (max-width: 1023px) { .sheet-offset .maplibregl-ctrl-bottom-left, .sheet-offset .maplibregl-ctrl-bottom-right { bottom: 52px; } }
 
 @media print {
   @page { size: A4; margin: 16mm 14mm; }
