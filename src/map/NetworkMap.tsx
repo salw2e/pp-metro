@@ -188,6 +188,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
       await addOverlay(map, state.current)
       if (map.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', map.getPitch() > 20 ? 'visible' : 'none')
       setReady(true)
+      if (!matchMedia('(hover: hover)').matches) { const c = map.getCenter(); setCoords([c.lng, c.lat]) }
       ;(window as unknown as { __ready: boolean }).__ready = true
     })
     // the vector style failed outright: show the raster fallback with a notice
@@ -440,7 +441,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
         {fallback && <div role="alert" className="absolute z-10 left-3 right-3 lg:right-auto lg:max-w-md bottom-24 lg:bottom-10 bg-warn-bg border border-[#ecd9ae] text-warn px-3 py-2 text-[13px]">{t('map.fallback')}</div>}
 
         {coords && (
-          <div className="absolute z-[5] left-[150px] bottom-[10px] hidden sm:flex items-center gap-1.5 bg-white/90 border border-line px-2 h-[22px] text-[11px] font-mono" aria-live="off">
+          <div className="absolute z-[5] left-[10px] bottom-[92px] lg:left-[150px] lg:bottom-[10px] flex items-center gap-1.5 bg-white/90 border border-line px-2 h-[22px] text-[11px] font-mono" aria-live="off">
             <Crosshair size={11} aria-hidden="true" />{coords[1].toFixed(5)}° N, {coords[0].toFixed(5)}° E
           </div>
         )}

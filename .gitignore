@@ -6,3 +6,4 @@ playwright-report
 .env
 data/raw
 public/data/_debug.geojson
+test-results

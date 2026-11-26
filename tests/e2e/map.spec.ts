@@ -26,17 +26,9 @@ test('base map tiles load and the network layers are present', async ({ page }) 
   for (const id of ['net-line', 'st-circle', 'st-ring', 'st-label', 'ext-line', 'depot-icon', 'river-x', 'rail-line']) {
     expect(await page.evaluate(i => !!(window as unknown as { __map: { getLayer(id: string): unknown } }).__map.getLayer(i), id)).toBe(true)
   }
-  // the canvas actually draws something other than a blank background
-  const nonBlank = await page.evaluate(() => {
-    const c = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement
-    const g = document.createElement('canvas'); g.width = 64; g.height = 64
-    const x = g.getContext('2d')!; x.drawImage(c, 0, 0, 64, 64)
-    const d = x.getImageData(0, 0, 64, 64).data
-    const colours = new Set<number>()
-    for (let i = 0; i < d.length; i += 16) colours.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2])
-    return colours.size
-  })
-  expect(nonBlank).toBeGreaterThan(20)
+  // the canvas actually draws a map: a blank canvas compresses to a few kilobytes
+  const png = await page.locator('canvas.maplibregl-canvas').screenshot()
+  expect(png.length).toBeGreaterThan(60_000)
   expect(errors).toEqual([])
 })
 
@@ -101,8 +93,9 @@ test('clicking a station on the map opens its information panel', async ({ page 
   await page.mouse.click(b.x + target.x, b.y + target.y)
   await expect(page.getByRole('heading', { level: 2, name: 'Wat Phnom' })).toBeVisible()
   await expect(page).toHaveURL(/station=watphnom/)
-  await expect(page.getByText('Planning justification')).toBeVisible()
-  await expect(page.getByText('Verification status')).toBeVisible()
+  const panel = page.locator('aside').first()
+  await expect(panel.getByText('Planning justification')).toBeVisible()
+  await expect(panel.getByText('Verification status')).toBeVisible()
 })
 
 test('hovering a station shows its name', async ({ page }) => {
@@ -200,7 +193,10 @@ test('coordinates follow the pointer', async ({ page }) => {
   const b = await mapBox(page)
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
   const c = await mapEval(page, m => m.getCenter())
-  await expect(page.getByText(new RegExp(`${c.lat.toFixed(2)}\\d+° N`))).toBeVisible()
+  const shown = await page.getByText(/° N, .*° E/).innerText()
+  const [lat, lng] = shown.match(/[\d.]+/g)!.map(Number)
+  expect(Math.abs(lat - c.lat)).toBeLessThan(0.001)
+  expect(Math.abs(lng - c.lng)).toBeLessThan(0.001)
 })
 
 test('GeoJSON export downloads the network', async ({ page }) => {

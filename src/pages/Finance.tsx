@@ -194,7 +194,7 @@ export function FinancePage() {
             <div className="flex justify-between"><span>Fare revenue per year</span><span className="font-mono">{inp.ridersPerDay ? `US$ ${fmt(r.fareRevenuePerYear, 1)} m` : 'enter riders'}</span></div>
             <div className="flex justify-between"><span>Fares as share of operating cost</span><span className="font-mono">{r.farebox == null ? 'n/a' : `${fmt(r.farebox * 100)}%`}</span></div>
           </div>
-          <table className="tbl border-t border-line">
+          <table className="tbl wrap border-t border-line">
             <thead><tr><th>Preset, same quantities</th><th className="num">2026 US$ bn</th><th className="num">Escalated</th></tr></thead>
             <tbody>
               {compare.map(({ s, r: c }) => <tr key={s}><td className="capitalize">{s}</td><td className="num font-mono">{fmt(c.real / 1000, 2)}</td><td className="num font-mono">{fmt(c.nominal / 1000, 2)}</td></tr>)}

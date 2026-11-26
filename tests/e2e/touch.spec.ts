@@ -2,23 +2,23 @@ import { test, expect, type Page } from '@playwright/test'
 import { waitForMap, mapEval, settle, noHorizontalOverflow } from './helpers'
 
 // iPhone 16 Pro Max CSS viewport
-test.use({ viewport: { width: 440, height: 956 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 })
+// gestures do not depend on pixel density; 1x keeps software rendering fast
+test.use({ viewport: { width: 440, height: 956 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 })
+test.setTimeout(150_000)
 
 type Pt = { x: number; y: number }
 
-async function touch(page: Page, type: 'touchStart' | 'touchMove' | 'touchEnd', points: Pt[]) {
-  const cdp = await page.context().newCDPSession(page)
-  await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((p, i) => ({ x: p.x, y: p.y, id: i })) })
-  await cdp.detach()
-}
-
+// touch state belongs to a DevTools session, so one session carries the whole gesture
 async function gesture(page: Page, from: Pt[], to: Pt[], steps = 12) {
-  await touch(page, 'touchStart', from)
+  const cdp = await page.context().newCDPSession(page)
+  const send = (type: string, points: Pt[]) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((p, i) => ({ x: p.x, y: p.y, id: i })) })
+  await send('touchStart', from)
   for (let s = 1; s <= steps; s++) {
-    await touch(page, 'touchMove', from.map((p, i) => ({ x: p.x + ((to[i].x - p.x) * s) / steps, y: p.y + ((to[i].y - p.y) * s) / steps })))
+    await send('touchMove', from.map((p, i) => ({ x: p.x + ((to[i].x - p.x) * s) / steps, y: p.y + ((to[i].y - p.y) * s) / steps })))
     await page.waitForTimeout(16)
   }
-  await touch(page, 'touchEnd', [])
+  await send('touchEnd', [])
+  await cdp.detach()
 }
 
 async function centre(page: Page) {
@@ -67,7 +67,7 @@ test('tapping a station opens the bottom sheet with its details', async ({ page 
   const b = (await page.locator('canvas.maplibregl-canvas').boundingBox())!
   await page.touchscreen.tap(b.x + pt.x, b.y + pt.y)
   await expect(page.getByRole('heading', { level: 2, name: 'Central Market' })).toBeVisible()
-  await page.getByRole('button', { name: 'Close' }).click()
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(page.getByRole('heading', { level: 2, name: 'Central Market' })).toHaveCount(0)
 })
 

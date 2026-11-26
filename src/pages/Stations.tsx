@@ -67,7 +67,7 @@ export function StationsPage() {
               {header('line', t('dir.line'), 'w-[110px]')}
               {header('type', t('dir.type'), 'w-[160px]')}
               {header('district', t('dir.district'), 'w-[170px]')}
-              <th className="w-[150px]"><span className="sr-only">{t('st.showOnMap')}</span></th>
+              <th className="w-[176px]"><span className="sr-only">{t('st.showOnMap')}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -91,7 +91,7 @@ export function StationsPage() {
                   <td>{typeOf(s)}{s.interchange && <span className="block text-muted text-[12.5px]">{t('st.interchange')}</span>}</td>
                   <td>{s.district ? name(s.district) : <span className="text-muted">Kandal Province</span>}</td>
                   <td>
-                    <Button onClick={() => navigate(href('map', { station: s.id }))} className="h-8"><MapPinned size={14} aria-hidden="true" />{t('st.showOnMap')}</Button>
+                    <Button onClick={() => navigate(href('map', { station: s.id }))} className="h-8 whitespace-nowrap"><MapPinned size={14} aria-hidden="true" />{t('st.showOnMap')}</Button>
                   </td>
                 </tr>
                 {open === s.id && (

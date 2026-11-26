@@ -75,13 +75,16 @@ test('unknown address shows the not-found page', async ({ page }) => {
 
 test('every external reference link is a well-formed https URL and every citation resolves', async ({ page }) => {
   await page.goto('references')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   const hrefs = await page.locator('main ol a[target=_blank]').evaluateAll(as => as.map(a => (a as HTMLAnchorElement).href))
   expect(hrefs.length).toBeGreaterThan(20)
   for (const h of hrefs) expect(h).toMatch(/^https:\/\/[^\s]+$/)
   for (const path of ['', 'lines', 'engineering', 'finance', 'environment', 'submission']) {
     await page.goto(path)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     const cites = await page.locator('a[href*="/metro/references#R"]').evaluateAll(as => as.map(a => (a as HTMLAnchorElement).hash.slice(1)))
     await page.goto('references')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     for (const id of new Set(cites)) await expect(page.locator(`[id="${id}"]`)).toHaveCount(1)
   }
 })
