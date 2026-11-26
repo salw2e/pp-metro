@@ -12,7 +12,7 @@ const QUERIES = {
   districts: `area["name:en"="Phnom Penh"]["admin_level"="4"]->.pp;
     rel(area.pp)["boundary"="administrative"]["admin_level"="6"]; out geom;`,
   railways: `way["railway"~"^(rail|disused|abandoned|construction)$"](${BBOX}); out geom;`,
-  water: `(way["natural"="water"]["water"="river"](${BBOX}); rel["natural"="water"]["water"="river"](${BBOX}); way["waterway"="riverbank"](${BBOX});); out geom;`,
+  water: `(way["natural"="water"]["water"~"^(river|canal)$"](${BBOX}); rel["natural"="water"]["water"~"^(river|canal)$"](${BBOX}); way["waterway"="riverbank"](${BBOX});); out geom;`,
   bridges: `way["bridge"="yes"]["highway"~"^(motorway|trunk|primary|secondary)$"](${BBOX}); out geom;`,
   roads: `way["highway"~"^(motorway|trunk|primary|secondary)$"](${BBOX}); out geom;`,
   places: `(

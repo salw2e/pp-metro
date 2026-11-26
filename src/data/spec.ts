@@ -188,6 +188,6 @@ export const LINES: LineSpec[] = [
 
 export const EXTENSIONS: ExtensionSpec[] = [
   { id: 'X1', line: 'L1', en: 'Line 1 north to Morodok Techo', km: 'ផ្នែកបន្ថែមខ្សែ ១ ទៅមរតកតេជោ', from: 'km9', to: [11.6815, 104.878], toEn: 'Morodok Techo National Stadium', toKm: 'ពហុកីឡដ្ឋានជាតិមរតកតេជោ', via: 'direct', why: 'Event and future residential demand in Prek Pnov. Justify with demand data before committing.' },
-  { id: 'X2', line: 'L1', en: 'Takhmao branch', km: 'ខ្សែបំបែកទៅតាខ្មៅ', from: 'meanchey', to: [11.4845, 104.9435], toEn: 'Takhmao', toKm: 'តាខ្មៅ', via: 'road', why: 'Takhmao lies about 2.5 km east of the airport corridor. A branch is cheaper than diverting the airport line through it.' },
+  { id: 'X2', line: 'L1', en: 'Takhmao branch', km: 'ខ្សែបំបែកទៅតាខ្មៅ', from: 'meanchey', to: [11.4845, 104.9435], toEn: 'Takhmao', toKm: 'តាខ្មៅ', via: 'direct', why: 'Takhmao lies about 2.5 km east of the airport corridor. A branch is cheaper than diverting the airport line through it.' },
   { id: 'X3', line: 'L4', en: 'Line 4 north to Phnom Penh Thmey', km: 'ផ្នែកបន្ថែមខ្សែ ៤ ទៅភ្នំពេញថ្មី', from: 'sensok', to: [11.622, 104.8573], toEn: 'Phnom Penh Thmey', toKm: 'ភ្នំពេញថ្មី', via: 'direct', why: 'Northern residential growth along Hanoi Road.' },
 ];

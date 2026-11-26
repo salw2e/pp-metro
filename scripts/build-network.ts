@@ -206,18 +206,19 @@ const round = (c: LngLat): LngLat => [+c[0].toFixed(6), +c[1].toFixed(6)];
 
 function riverCrossings(coords: LngLat[]) {
   const pts = resample(coords, 10);
-  const runs: { river: string; riverKm: string; lengthM: number; at: LngLat }[] = [];
+  const runs: { river: string; riverKm: string; lengthM: number; at: LngLat; coords: LngLat[] }[] = [];
   let cur: (typeof runs)[number] | null = null;
   for (const p of pts) {
     const hit = water.features.find((f: any) => pointInPolygon(p, f.geometry));
     if (hit) {
       const km = hit.properties.name ?? '';
-      if (!cur) { cur = { river: RIVER_NAMES[km] ?? 'Unnamed water body', riverKm: km, lengthM: 0, at: p }; runs.push(cur); }
+      if (!cur) { cur = { river: RIVER_NAMES[km] ?? 'Unnamed water body', riverKm: km, lengthM: 0, at: p, coords: [] }; runs.push(cur); }
       cur.lengthM += 10;
+      cur.coords.push(round(p));
     } else cur = null;
   }
   // ignore ponds and channels under 40 m; they are drainage, not river crossings
-  return runs.filter(r => r.lengthM >= 40).map(r => ({ ...r, at: round(r.at) }));
+  return runs.filter(r => r.lengthM >= 40).map(r => ({ ...r, at: round(r.coords[r.coords.length >> 1]) }));
 }
 
 function districtOf(p: LngLat) {
@@ -242,6 +243,7 @@ const kindOf = (p: any) => KIND.find(([, f]) => f(p))?.[0] ?? null;
 
 function nearby(p: LngLat, radius: number, filter: (kind: string, props: any) => boolean, limit: number) {
   const seen = new Set<string>();
+  const perKind = new Map<string, number>();
   return places.features
     .map((f: any) => ({ f, d: haversine(p, f.geometry.coordinates), kind: kindOf(f.properties) }))
     .filter((x: any) => x.kind && x.d <= radius && filter(x.kind, x.f.properties))
@@ -249,6 +251,9 @@ function nearby(p: LngLat, radius: number, filter: (kind: string, props: any) =>
     .filter((x: any) => {
       const en = x.f.properties['name:en'] ?? x.f.properties.name;
       if (!en || seen.has(en)) return false;
+      // at most two of each kind so that one category does not crowd out the rest
+      if ((perKind.get(x.kind) ?? 0) >= 2) return false;
+      perKind.set(x.kind, (perKind.get(x.kind) ?? 0) + 1);
       seen.add(en);
       return true;
     })
