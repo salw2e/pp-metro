@@ -38,7 +38,7 @@ export function StationPanel({ s, onBack }: { s: Station; onBack?: () => void })
             ? s.lines.map(l => name(lineById.get(l)!)).join(', ')
             : s.id === 'centralmarket' || s.id === 'ppstation'
               ? 'Walking link of about 450 m between Central Market metro and Phnom Penh railway station'
-              : '—'}
+              : 'None'}
         </KV>
         <KV k={t('st.district')}>
           {s.district ? (
@@ -49,7 +49,7 @@ export function StationPanel({ s, onBack }: { s: Station; onBack?: () => void })
           ) : 'Outside the Phnom Penh khan boundaries (Kandal Province)'}
         </KV>
         <KV k={t('st.catchment')}>
-          {s.neighbourhoods.length ? s.neighbourhoods.join(', ') : '—'}
+          {s.neighbourhoods.length ? s.neighbourhoods.join(', ') : 'No named neighbourhood in OpenStreetMap within 1.2 km'}
           <span className="block text-muted text-[12.5px]">Residential and commercial catchment within about 800 m to be measured from land-use and population data.</span>
         </KV>
         <KV k={t('st.landmarks')}>
