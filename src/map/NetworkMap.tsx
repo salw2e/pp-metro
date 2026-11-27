@@ -173,9 +173,8 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
       attributionControl: { compact: true },
       dragRotate: true,
       touchPitch: true,
-      // phones report 3x pixel density; 2x looks the same on a map and renders far faster
-      pixelRatio: Math.min(devicePixelRatio || 1, 2),
-      canvasContextAttributes: { preserveDrawingBuffer: false, antialias: (devicePixelRatio || 1) < 2 },
+      // full device resolution with smoothed edges: the map is used for recordings
+      canvasContextAttributes: { preserveDrawingBuffer: false, antialias: true },
     } as maplibregl.MapOptions)
     mapRef.current = map
     ;(window as unknown as { __map: MLMap }).__map = map

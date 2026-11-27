@@ -63,6 +63,9 @@ function directionAt(coords: LngLat[], p: LngLat) {
 
 const poly = (ring: LngLat[], props: Record<string, unknown>): GeoJSON.Feature => ({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [ring] } })
 
+const GROUND = ['district-line', 'bridge-line', 'rail-line', 'ext-line', 'river-x', 'net-casing', 'net-line', 'net-elevated-core', 'net-surface-core']
+const OWN = new Set(['st-label', 'lm-label', 'depot-label', 'depot-icon', 'district-label'])
+
 let cached: { deck: GeoJSON.FeatureCollection; piers: GeoJSON.FeatureCollection; stationBoxes: GeoJSON.FeatureCollection } | null = null
 
 function build() {
@@ -131,7 +134,12 @@ export function add3D(map: MLMap) {
   set('viaduct', d.deck)
   set('piers', d.piers)
   set('station-3d', d.stationBoxes)
-  const before = map.getLayer('lm-dot') ? 'lm-dot' : map.getLayer('depot-icon') ? 'depot-icon' : undefined
+  // draw order: base map shapes, project ground lines, buildings, 3D project volumes, then all text and markers.
+  // Text stays above the buildings so it is never cut by them.
+  const firstText = map.getStyle().layers.find(l => l.type === 'symbol' && !OWN.has(l.id))?.id
+  for (const id of ['transit-veil', ...GROUND]) if (map.getLayer(id) && firstText) map.moveLayer(id, firstText)
+  if (map.getLayer('building-3d') && firstText) map.moveLayer('building-3d', firstText)
+  const before = firstText
   map.addLayer({
     id: 'piers-3d', type: 'fill-extrusion', source: 'piers', minzoom: 13, layout: { visibility: 'none' },
     paint: { 'fill-extrusion-color': '#9aa3ae', 'fill-extrusion-base': 0, 'fill-extrusion-height': DECK_BASE, 'fill-extrusion-opacity': 0.95 },
@@ -144,9 +152,12 @@ export function add3D(map: MLMap) {
     id: 'station-3d', type: 'fill-extrusion', source: 'station-3d', minzoom: 12, layout: { visibility: 'none' },
     paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': 0.95, 'fill-extrusion-vertical-gradient': true },
   }, before)
-  // buildings are drawn above roads and ground lines (so a building hides a line behind it instead of the line
-  // cutting through it) and below the viaducts and station volumes
-  if (map.getLayer('building-3d')) map.moveLayer('building-3d', 'piers-3d')
+  // a faint copy of the ground lines over the buildings keeps a line readable where a tall building hides it
+  map.addLayer({
+    id: 'net-xray', type: 'line', source: 'network', layout: { visibility: 'none', 'line-join': 'round' },
+    filter: ['!=', ['get', 'type'], 'elevated'],
+    paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6], 'line-opacity': 0.35 },
+  }, before)
 }
 
 let saved: Record<string, unknown> | null = null
@@ -154,7 +165,7 @@ let saved: Record<string, unknown> | null = null
 /** Switches the 3D presentation on or off; called when the pitch crosses 20 degrees and after style loads. */
 export function set3D(map: MLMap, on: boolean) {
   const vis = on ? 'visible' : 'none'
-  for (const id of ['viaduct-3d', 'piers-3d', 'station-3d', 'building-3d']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
+  for (const id of ['viaduct-3d', 'piers-3d', 'station-3d', 'building-3d', 'net-xray']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
   // the flat elevated line would show under the viaduct, so it is hidden while the viaduct is drawn
   for (const id of ['net-casing', 'net-line', 'net-elevated-core']) {
     if (!map.getLayer(id)) continue
@@ -169,7 +180,8 @@ export function set3D(map: MLMap, on: boolean) {
   }
   // base-map icons and minor labels compete with the network in an oblique view
   for (const l of map.getStyle().layers) {
-    if (l.type === 'symbol' && /^(poi|highway-shield|road_shield|airport)/.test(l.id)) map.setLayoutProperty(l.id, 'visibility', on ? 'none' : 'visible')
+    // street names and neighbourhood names are dense and lie flat on the ground, so they clash with buildings
+    if (l.type === 'symbol' && /^(poi|highway-shield|road_shield|airport|highway-name|label_other|road_one_way)/.test(l.id)) map.setLayoutProperty(l.id, 'visibility', on ? 'none' : 'visible')
   }
   if (on) {
     map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: 0.42, position: [1.3, 210, 35] })

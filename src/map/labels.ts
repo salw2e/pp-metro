@@ -19,7 +19,7 @@ const isKhmer = (s: string) => /[ក-៿]/.test(s)
 
 function draw(style: LabelStyle, text: string) {
   const st = STYLES[style]
-  const ratio = Math.min(2, Math.max(1, Math.round(devicePixelRatio || 1)))
+  const ratio = Math.min(3, Math.max(1, Math.ceil(devicePixelRatio || 1)))
   const family = isKhmer(text) ? '"Noto Sans Khmer", sans-serif' : '"IBM Plex Sans", sans-serif'
   const font = `${st.weight} ${st.size * ratio}px ${family}`
   const shown = st.upper && !isKhmer(text) ? text.toUpperCase() : text
