@@ -1,6 +1,8 @@
-import type { Map as MLMap, GeoJSONSource } from 'maplibre-gl'
-import { lines, stations, stationById } from '../data/network'
-import { projector, resample, lineLength, type LngLat } from '../lib/geo'
+import { railStrips } from './rail-geometry'
+import { buildTour, sampleTour } from './tour'
+import type { Map as MLMap, GeoJSONSource, LineLayerSpecification } from 'maplibre-gl'
+import { lines, stations } from '../data/network'
+import { projector, resample, type LngLat } from '../lib/geo'
 
 // 3D presentation: elevated sections as viaducts on piers, stations as volumes, softer buildings, light and sky.
 // Heights are illustrative (deck about 9 to 11 m above the road), not design values.
@@ -8,28 +10,6 @@ import { projector, resample, lineLength, type LngLat } from '../lib/geo'
 const DECK_BASE = 9
 const DECK_TOP = 11
 const HALF_WIDTH = 5 // m, double-track deck
-
-/** Offsets a polyline sideways by +-half metres and returns the strip as a polygon ring. */
-function strip(coords: LngLat[], half: number): LngLat[] {
-  const pr = projector(coords[0][1])
-  const P = coords.map(pr.fwd)
-  const left: [number, number][] = []
-  const right: [number, number][] = []
-  for (let i = 0; i < P.length; i++) {
-    const a = P[Math.max(0, i - 1)]
-    const b = P[Math.min(P.length - 1, i + 1)]
-    const dx = b[0] - a[0]
-    const dy = b[1] - a[1]
-    const l = Math.hypot(dx, dy) || 1
-    const nx = -dy / l
-    const ny = dx / l
-    left.push([P[i][0] + nx * half, P[i][1] + ny * half])
-    right.push([P[i][0] - nx * half, P[i][1] - ny * half])
-  }
-  const ring = [...left, ...right.reverse()]
-  ring.push(ring[0])
-  return ring.map(pr.inv)
-}
 
 /** A rectangle of the given length and width centred on p, aligned with the direction dir (radians). */
 function box(p: LngLat, dir: number, length: number, width: number): LngLat[] {
@@ -72,21 +52,23 @@ function build() {
   if (cached) return cached
   const deck: GeoJSON.Feature[] = []
   const piers: GeoJSON.Feature[] = []
-  for (const l of lines) for (const s of l.segments) {
-    if (s.type !== 'elevated') continue
-    const pts = resample(s.coords, 12)
-    // short pieces keep the extrusion triangulation simple and let tiles clip cleanly
-    for (let i = 0; i < pts.length - 1; i += 16) {
-      const piece = pts.slice(i, Math.min(pts.length, i + 17))
-      if (piece.length > 1) {
-        deck.push(poly(strip(piece, HALF_WIDTH), { part: 'deck', color: '#cdd3db', base: DECK_BASE, top: DECK_TOP }))
-        deck.push(poly(strip(piece, 2.6), { part: 'track', color: l.color, base: DECK_TOP, top: DECK_TOP + 0.7 }))
-      }
+  for (const l of lines) {
+    const runs: LngLat[][] = []
+    let run: LngLat[] | null = null
+    for (const segment of l.segments) {
+      if (segment.type !== 'elevated') { run = null; continue }
+      if (!run) { run = [...segment.coords]; runs.push(run) }
+      else run.push(...segment.coords.slice(1))
     }
-    const pierPts = resample(s.coords, 36)
-    for (let i = 1; i < pierPts.length - 1; i++) {
-      const dir = directionAt(s.coords, pierPts[i])
-      piers.push(poly(box(pierPts[i], dir, 2.2, 3.2), { line: l.id }))
+    for (const coords of runs) {
+      const pts = resample(coords, 12)
+      for (const ring of railStrips(pts, HALF_WIDTH)) deck.push(poly(ring, { part: 'deck', line: l.id, color: '#cdd3db', base: DECK_BASE, top: DECK_TOP }))
+      // Two separate track beds read as railway geometry instead of a solid coloured ribbon.
+      for (const offset of [-2, 2]) for (const ring of railStrips(pts, 0.9, offset)) {
+        deck.push(poly(ring, { part: 'track', line: l.id, color: '#58636d', base: DECK_TOP, top: DECK_TOP + 0.18 }))
+      }
+      const pierPts = resample(coords, 36)
+      for (let i = 1; i < pierPts.length - 1; i++) piers.push(poly(box(pierPts[i], directionAt(coords, pierPts[i]), 2.2, 3.2), { line: l.id }))
     }
   }
   const boxes: GeoJSON.Feature[] = []
@@ -125,6 +107,7 @@ function build() {
 
 /** Adds the 3D layers (hidden until the camera is tilted). Call after addOverlay on every style load. */
 export function add3D(map: MLMap) {
+  roadPaint.set(map, new Map())
   const d = build()
   const set = (id: string, data: GeoJSON.FeatureCollection) => {
     const s = map.getSource(id) as GeoJSONSource | undefined
@@ -146,26 +129,24 @@ export function add3D(map: MLMap) {
   }, before)
   map.addLayer({
     id: 'viaduct-3d', type: 'fill-extrusion', source: 'viaduct', layout: { visibility: 'none' },
-    paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': 0.97, 'fill-extrusion-vertical-gradient': true },
+    paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': 1, 'fill-extrusion-vertical-gradient': true },
   }, before)
   map.addLayer({
     id: 'station-3d', type: 'fill-extrusion', source: 'station-3d', minzoom: 12, layout: { visibility: 'none' },
     paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': 0.95, 'fill-extrusion-vertical-gradient': true },
   }, before)
-  // a faint copy of the ground lines over the buildings keeps a line readable where a tall building hides it
-  map.addLayer({
-    id: 'net-xray', type: 'line', source: 'network', layout: { visibility: 'none', 'line-join': 'round' },
-    filter: ['!=', ['get', 'type'], 'elevated'],
-    paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6], 'line-opacity': 0.35 },
-  }, before)
+
 }
 
-let saved: Record<string, unknown> | null = null
+type RoadPaint = { color: NonNullable<LineLayerSpecification['paint']>['line-color']; visibility: 'visible' | 'none' | undefined }
+const roadPaint = new WeakMap<MLMap, Map<string, RoadPaint>>()
 
 /** Switches the 3D presentation on or off; called when the pitch crosses 20 degrees and after style loads. */
 export function set3D(map: MLMap, on: boolean) {
+  const originals = roadPaint.get(map) ?? new Map<string, RoadPaint>()
+  roadPaint.set(map, originals)
   const vis = on ? 'visible' : 'none'
-  for (const id of ['viaduct-3d', 'piers-3d', 'station-3d', 'building-3d', 'net-xray']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
+  for (const id of ['viaduct-3d', 'piers-3d', 'station-3d', 'building-3d']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
   // the flat elevated line would show under the viaduct, so it is hidden while the viaduct is drawn
   for (const id of ['net-casing', 'net-line', 'net-elevated-core']) {
     if (!map.getLayer(id)) continue
@@ -173,13 +154,20 @@ export function set3D(map: MLMap, on: boolean) {
     map.setFilter(id, on ? (base ? ['==', 1, 0] : ['!=', ['get', 'type'], 'elevated']) : (base as never))
   }
   if (map.getLayer('building-3d')) {
-    if (!saved) saved = { color: map.getPaintProperty('building-3d', 'fill-extrusion-color'), opacity: map.getPaintProperty('building-3d', 'fill-extrusion-opacity') }
     map.setPaintProperty('building-3d', 'fill-extrusion-color', ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 0], 0, '#e9ecf0', 30, '#d9dee5', 90, '#c6cdd7', 200, '#b3bcc8'])
     map.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.88)
     map.setPaintProperty('building-3d', 'fill-extrusion-vertical-gradient', true)
   }
   // base-map icons and minor labels compete with the network in an oblique view
   for (const l of map.getStyle().layers) {
+    if (l.type === 'line' && /^(road|bridge|tunnel)_/.test(l.id) && !/rail/.test(l.id)) {
+      if (on && !originals.has(l.id)) originals.set(l.id, { color: map.getPaintProperty(l.id, 'line-color') as RoadPaint['color'], visibility: map.getLayoutProperty(l.id, 'visibility') as RoadPaint['visibility'] })
+      const original = originals.get(l.id)
+      if (original) {
+        map.setPaintProperty(l.id, 'line-color', on ? '#f1f2f3' : original.color)
+        map.setLayoutProperty(l.id, 'visibility', on && l.id.endsWith('_casing') ? 'none' : original.visibility ?? 'visible')
+      }
+    }
     // street names and neighbourhood names are dense and lie flat on the ground, so they clash with buildings
     if (l.type === 'symbol' && /^(poi|highway-shield|road_shield|airport|highway-name|label_other|road_one_way)/.test(l.id)) map.setLayoutProperty(l.id, 'visibility', on ? 'none' : 'visible')
   }
@@ -192,79 +180,46 @@ export function set3D(map: MLMap, on: boolean) {
   }
 }
 
-/** Smooth camera flight along a line, or an orbit around a station, for presentations. Returns a stop function. */
+/** Directed camera sequence; dragging, scrolling or changing the style returns control immediately. */
 export function startTour(map: MLMap, target: { line?: string; station?: string }, onEnd: () => void) {
+  const frames = buildTour(target)
   let raf = 0
   let stopped = false
+  let elapsed = 0
+  let last = 0
+  const canvas = map.getContainer()
+  const page = canvas.ownerDocument
+  const resetClock = () => { last = performance.now() }
   const stop = () => {
     if (stopped) return
     stopped = true
     cancelAnimationFrame(raf)
-    for (const ev of ['mousedown', 'touchstart', 'wheel'] as const) map.getCanvas().removeEventListener(ev, stop)
+    page?.removeEventListener('visibilitychange', resetClock)
+    map.off('moveend', begin)
+    map.off('style.load', stop)
+    map.stop()
+    for (const ev of ['mousedown', 'touchstart', 'wheel', 'keydown'] as const) canvas.removeEventListener(ev, stop)
     onEnd()
   }
-  for (const ev of ['mousedown', 'touchstart', 'wheel'] as const) map.getCanvas().addEventListener(ev, stop, { passive: true })
-
-  if (target.station) {
-    const s = stationById.get(target.station)!
-    const start = performance.now()
-    const b0 = map.getBearing()
-    const tick = (t: number) => {
-      if (stopped) return
-      const k = (t - start) / 1000
-      map.jumpTo({ center: [s.lng, s.lat], zoom: 16.4, pitch: 62, bearing: b0 + k * 9 })
-      if (k > 40) return stop()
-      raf = requestAnimationFrame(tick)
-    }
-    map.easeTo({ center: [s.lng, s.lat], zoom: 16.4, pitch: 62, duration: 1500 })
-    map.once('moveend', () => { if (!stopped) raf = requestAnimationFrame(tick) })
-    return stop
+  const tick = (now: number) => {
+    if (stopped) return
+    // Keep real-time pacing on slow devices; hidden tabs pause instead of skipping shots.
+    if (!page?.hidden) elapsed += (now - last) / 1000
+    last = now
+    map.jumpTo(sampleTour(frames, elapsed))
+    if (elapsed >= frames.at(-1)!.time) { stop(); return }
+    raf = requestAnimationFrame(tick)
   }
-
-  const line = lines.find(l => l.id === (target.line ?? 'L1'))!
-  const path = resample(line.segments.flatMap(s => s.coords), 20)
-  const total = lineLength(path)
-  // about 45 seconds for any line, never faster than 400 m/s
-  const speed = Math.min(400, Math.max(120, total / 45))
-  const look = 450 // m ahead: the camera faces where the line is going
-  const pr = projector(path[0][1])
-  const P = path.map(pr.fwd)
-  const cum = [0]
-  for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]))
-  const at = (d: number): [number, number] => {
-    d = Math.max(0, Math.min(cum[cum.length - 1], d))
-    let i = cum.findIndex(c => c >= d)
-    if (i <= 0) i = 1
-    const t = (d - cum[i - 1]) / (cum[i] - cum[i - 1] || 1)
-    return [P[i - 1][0] + t * (P[i][0] - P[i - 1][0]), P[i - 1][1] + t * (P[i][1] - P[i - 1][1])]
-  }
-  const bearingAt = (d: number) => {
-    const a = at(d - look / 2)
-    const b = at(d + look)
-    return (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI
-  }
-  let bearing = bearingAt(0)
-  let last = 0
-  let dist = 0
-  const first = pr.inv(at(0))
-  map.easeTo({ center: first, zoom: 15.7, pitch: 64, bearing, duration: 1800 })
-  map.once('moveend', () => {
+  const begin = () => {
     if (stopped) return
     last = performance.now()
-    const tick = (t: number) => {
-      if (stopped) return
-      const dt = Math.min(0.05, (t - last) / 1000)
-      last = t
-      dist += speed * dt
-      if (dist >= total) return stop()
-      // ease the bearing so that curves are taken smoothly rather than snapping
-      const target = bearingAt(dist)
-      let diff = ((target - bearing + 540) % 360) - 180
-      bearing += diff * Math.min(1, dt * 1.6)
-      map.jumpTo({ center: pr.inv(at(dist)), bearing, pitch: 64, zoom: 15.7 })
-      raf = requestAnimationFrame(tick)
-    }
     raf = requestAnimationFrame(tick)
-  })
+  }
+  map.stop()
+  for (const ev of ['mousedown', 'touchstart', 'wheel', 'keydown'] as const) canvas.addEventListener(ev, stop, { passive: true })
+  page?.addEventListener('visibilitychange', resetClock)
+  map.on('style.load', stop)
+  map.once('moveend', begin)
+  map.easeTo({ ...sampleTour(frames, 0), duration: 1200 })
   return stop
 }

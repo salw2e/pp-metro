@@ -141,6 +141,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
   measureRef.current = measure
 
   const fitAll = useCallback((ids = ALL) => {
+    stopTour.current?.()
     const m = mapRef.current
     if (!m) return
     const narrow = (wrap.current?.clientWidth ?? 1000) < 1024
@@ -148,6 +149,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
   }, [])
 
   const select = useCallback((id: string | null, fly = true) => {
+    stopTour.current?.()
     setSel(id)
     const params = new URLSearchParams(location.search)
     if (id) params.set('station', id); else params.delete('station')
@@ -275,7 +277,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
     map.on('dblclick', e => {
       if (measureRef.current.on) { e.preventDefault(); setMeasure(m => ({ on: false, pts: m.pts })) }
     })
-    return () => { clearTimeout(timer); map.remove(); mapRef.current = null }
+    return () => { clearTimeout(timer); stopTour.current?.(); map.remove(); mapRef.current = null }
   }, [noWebgl, select])
 
   // initial focus from the URL once the overlay is ready
@@ -294,6 +296,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
     const m = mapRef.current
     if (!m) return
     if (firstStyle.current) { firstStyle.current = false; return }
+    stopTour.current?.()
     setReady(false)
     setFallback(false)
     m.setStyle(BASEMAPS[basemap].style, { diff: false })
@@ -342,23 +345,34 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
   const reset = () => {
     setFocusLine(null)
     select(null, false)
+    stopTour.current?.()
     mapRef.current?.flyTo({ center: HOME.center, zoom: HOME.zoom, pitch: 0, bearing: 0, duration: 700 })
   }
   const toggleTilt = () => {
+    stopTour.current?.()
     const m = mapRef.current
     if (!m) return
     m.easeTo({ pitch: m.getPitch() > 20 ? 0 : 55, bearing: m.getPitch() > 20 ? 0 : -15, duration: 700 })
   }
   const tour = () => {
-    const m = mapRef.current
-    if (!m) return
-    if (stopTour.current) { stopTour.current(); return }
+    if (!mapRef.current) return
+    if (touring) {
+      stopTour.current?.()
+      setTouring(false)
+      return
+    }
+    if (basemap !== '3d') { setReady(false); setBasemap('3d') }
     setTouring(true)
-    stopTour.current = startTour(m, selected ? { station: selected } : { line: focusLine ?? 'L1' }, () => { stopTour.current = null; setTouring(false) })
   }
+  useEffect(() => {
+    const m = mapRef.current
+    if (!m || !ready || !touring || stopTour.current) return
+    stopTour.current = startTour(m, selected ? { station: selected } : { line: focusLine ?? 'L1' }, () => { stopTour.current = null; setTouring(false) })
+  }, [ready, touring, selected, focusLine])
   useEffect(() => () => stopTour.current?.(), [])
   const exportGeo = () => download('phnom-penh-rail-2050-network.geojson', JSON.stringify(buildExport(), null, 1), 'application/geo+json')
   const pickSearch = (i: { kind: string; id: string; at: LngLat }) => {
+    stopTour.current?.()
     if (i.kind === 'station') select(i.id)
     else mapRef.current?.flyTo({ center: i.at, zoom: i.kind === 'district' ? 13 : 15.5, duration: 700 })
   }

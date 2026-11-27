@@ -28,7 +28,7 @@ location ^~ /metro/ {
 }
 ```
 
-Copy the build with `rsync -a --delete dist/ /var/www/metro/`.
+Copy the build with `rsync -a --chmod=D755,F644 --delete dist/ /var/www/metro/`.
 
 ## Other hosts
 
