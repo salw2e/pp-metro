@@ -54,12 +54,12 @@ test('mouse wheel and double-click zoom in', async ({ page }) => {
   const b = await mapBox(page)
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
   await page.mouse.wheel(0, -600)
+  // software rendering can delay the first zoom frame, so wait for the change rather than a fixed time
+  await expect.poll(() => mapEval(page, m => m.getZoom()), { timeout: 15_000 }).toBeGreaterThan(z0 + 0.3)
   await settle(page)
   const z1 = await mapEval(page, m => m.getZoom())
-  expect(z1).toBeGreaterThan(z0 + 0.3)
   await page.mouse.dblclick(b.x + b.width / 2, b.y + b.height / 2)
-  await settle(page)
-  expect(await mapEval(page, m => m.getZoom())).toBeGreaterThan(z1 + 0.5)
+  await expect.poll(() => mapEval(page, m => m.getZoom()), { timeout: 15_000 }).toBeGreaterThan(z1 + 0.5)
 })
 
 test('tilt button and zoom controls work; reset restores the camera', async ({ page }) => {

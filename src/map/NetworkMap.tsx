@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Map as MLMap, MapGeoJSONFeature, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl'
-import { Crosshair, Download, Layers3, Maximize2, Ruler, RotateCcw, Box, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { Crosshair, Download, Layers3, Maximize2, Ruler, RotateCcw, Box, X, ChevronUp, ChevronDown, Video, Square } from 'lucide-react'
 import maplibregl from './maplibre'
 import { BASEMAPS, BASEMAP_ORDER, fallbackStyle, type BasemapId } from './basemaps'
 import { installLabelImages } from './labels'
@@ -12,6 +12,7 @@ import { StationPanel } from '../components/StationPanel'
 import { LineMark, download } from '../components/ui'
 import { haversine, type LngLat } from '../lib/geo'
 import { buildExport } from '../lib/exports'
+import { add3D, set3D, startTour } from './three'
 
 const HOME = { center: [104.905, 11.535] as [number, number], zoom: 10.6 }
 const ALL = lines.map(l => l.id)
@@ -116,6 +117,7 @@ function SearchBox({ onPick }: { onPick: (i: SearchItem) => void }) {
 export function NetworkMap({ initialStation, initialLine }: { initialStation?: string | null; initialLine?: string | null }) {
   const { t, lang, name, num } = useLang()
   const wrap = useRef<HTMLDivElement>(null)
+  const mapArea = useRef<HTMLDivElement>(null)
   const el = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const [basemap, setBasemap] = useState<BasemapId>('light')
@@ -127,7 +129,10 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
   const [ready, setReady] = useState(false)
   const [fallback, setFallback] = useState(false)
   const [noWebgl] = useState(() => !webglAvailable())
-  const [coords, setCoords] = useState<LngLat | null>(null)
+  // the coordinate readout is written straight to the DOM: a React update on every frame made dragging stutter
+  const coordRef = useRef<HTMLSpanElement>(null)
+  const [touring, setTouring] = useState(false)
+  const stopTour = useRef<(() => void) | null>(null)
   const [measure, setMeasure] = useState<{ on: boolean; pts: LngLat[] }>({ on: false, pts: [] })
   const [pitched, setPitched] = useState(false)
   const state = useRef<OverlayState>({ lang, layers, focusLine, selected, transit: false })
@@ -168,13 +173,15 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
       attributionControl: { compact: true },
       dragRotate: true,
       touchPitch: true,
-      canvasContextAttributes: { preserveDrawingBuffer: false },
+      // phones report 3x pixel density; 2x looks the same on a map and renders far faster
+      pixelRatio: Math.min(devicePixelRatio || 1, 2),
+      canvasContextAttributes: { preserveDrawingBuffer: false, antialias: (devicePixelRatio || 1) < 2 },
     } as maplibregl.MapOptions)
     mapRef.current = map
     ;(window as unknown as { __map: MLMap }).__map = map
     installLabelImages(map)
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
-    map.addControl(new maplibregl.FullscreenControl({ container: wrap.current! }), 'bottom-right')
+    map.addControl(new maplibregl.FullscreenControl({ container: mapArea.current! }), 'bottom-right')
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 120 }), 'bottom-left')
 
     let loaded = false
@@ -186,9 +193,10 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
       loaded = true
       await fonts
       await addOverlay(map, state.current)
-      if (map.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', map.getPitch() > 20 ? 'visible' : 'none')
+      add3D(map)
+      set3D(map, map.getPitch() > 20)
       setReady(true)
-      if (!matchMedia('(hover: hover)').matches) { const c = map.getCenter(); setCoords([c.lng, c.lat]) }
+      showCoords(map.getCenter())
       ;(window as unknown as { __ready: boolean }).__ready = true
     })
     // the vector style failed outright: show the raster fallback with a notice
@@ -197,12 +205,21 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
       const msg = String((e as unknown as { error?: { message?: string } }).error?.message ?? '')
       if (!loaded && /style|Failed to fetch|NetworkError|404|AJAX/i.test(msg)) { clearTimeout(timer); setFallback(true); map.setStyle(fallbackStyle, { diff: false }) }
     })
-    map.on('mousemove', e => setCoords([e.lngLat.lng, e.lngLat.lat]))
-    map.on('move', () => { if (!matchMedia('(hover: hover)').matches) { const c = map.getCenter(); setCoords([c.lng, c.lat]) } })
-    map.on('pitchend', () => {
+    const hoverDevice = matchMedia('(hover: hover)').matches
+    let coordFrame = 0
+    const showCoords = (c: { lng: number; lat: number }) => {
+      if (coordFrame) return
+      coordFrame = requestAnimationFrame(() => {
+        coordFrame = 0
+        if (coordRef.current) coordRef.current.textContent = `${c.lat.toFixed(5)}° N, ${c.lng.toFixed(5)}° E`
+      })
+    }
+    map.on('mousemove', e => showCoords(e.lngLat))
+    if (!hoverDevice) map.on('move', () => showCoords(map.getCenter()))
+    let tilted = false
+    map.on('pitch', () => {
       const p = map.getPitch() > 20
-      setPitched(p)
-      if (map.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', p ? 'visible' : 'none')
+      if (p !== tilted) { tilted = p; setPitched(p); set3D(map, p) }
     })
 
     // hover information on devices with a mouse
@@ -223,13 +240,24 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
       if (p.kind === 'river') return `<strong>${p.river}</strong><br>${p.type} crossing, about ${p.lengthM} m over water`
       return ''
     }
+    // hover lookups run at most once per frame and never while the map is being dragged
+    let hoverFrame = 0
+    let lastHover: maplibregl.MapMouseEvent | null = null
     map.on('mousemove', e => {
-      if (!matchMedia('(hover: hover)').matches || measureRef.current.on) return
-      const fs = map.queryRenderedFeatures(e.point, { layers: hoverable.filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none') })
-      map.getCanvas().style.cursor = fs.length ? 'pointer' : ''
-      if (fs.length) popup.setLngLat(e.lngLat).setHTML(describe(fs[0])).addTo(map)
-      else popup.remove()
+      if (!hoverDevice || measureRef.current.on) return
+      lastHover = e
+      if (hoverFrame) return
+      hoverFrame = requestAnimationFrame(() => {
+        hoverFrame = 0
+        const ev = lastHover
+        if (!ev || map.isMoving() || (ev.originalEvent as MouseEvent).buttons) { popup.remove(); return }
+        const fs = map.queryRenderedFeatures(ev.point, { layers: hoverable.filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none') })
+        map.getCanvas().style.cursor = fs.length ? 'pointer' : ''
+        if (fs.length) popup.setLngLat(ev.lngLat).setHTML(describe(fs[0])).addTo(map)
+        else popup.remove()
+      })
     })
+    map.on('dragstart', () => popup.remove())
     map.on('mouseout', () => popup.remove())
     map.on('click', e => {
       const m = measureRef.current
@@ -322,6 +350,14 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
     if (!m) return
     m.easeTo({ pitch: m.getPitch() > 20 ? 0 : 55, bearing: m.getPitch() > 20 ? 0 : -15, duration: 700 })
   }
+  const tour = () => {
+    const m = mapRef.current
+    if (!m) return
+    if (stopTour.current) { stopTour.current(); return }
+    setTouring(true)
+    stopTour.current = startTour(m, selected ? { station: selected } : { line: focusLine ?? 'L1' }, () => { stopTour.current = null; setTouring(false) })
+  }
+  useEffect(() => () => stopTour.current?.(), [])
   const exportGeo = () => download('phnom-penh-rail-2050-network.geojson', JSON.stringify(buildExport(), null, 1), 'application/geo+json')
   const pickSearch = (i: { kind: string; id: string; at: LngLat }) => {
     if (i.kind === 'station') select(i.id)
@@ -403,7 +439,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
         <div className="flex-1 overflow-y-auto p-4">{panelBody}</div>
       </aside>
 
-      <div className="relative flex-1 min-w-0">
+      <div ref={mapArea} className="relative flex-1 min-w-0 bg-white">
         {/* MapLibre's own CSS makes its container position: relative, so the size is set inline on an inner element */}
         <div className="absolute inset-0"><div ref={el} style={{ width: '100%', height: '100%' }} role="region" aria-label={t('nav.map')} /></div>
         {!ready && <div className="absolute inset-0 grid place-items-center pointer-events-none"><span className="bg-white border border-line px-3 py-2 text-[13px]">{t('map.loading')}</span></div>}
@@ -421,6 +457,7 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
             <ToolButton label={t('map.fit')} onClick={() => fitAll(focusLine ? [focusLine] : ALL)}><Maximize2 size={17} /></ToolButton>
             <ToolButton label={t('map.reset')} onClick={reset}><RotateCcw size={17} /></ToolButton>
             <ToolButton label={t('map.tilt')} pressed={pitched} onClick={toggleTilt}><Box size={17} /></ToolButton>
+            <ToolButton label={touring ? t('map.tourStop') : t('map.tour')} pressed={touring} onClick={tour}>{touring ? <Square size={15} /> : <Video size={17} />}</ToolButton>
             <ToolButton label={t('map.measure')} pressed={measure.on} onClick={() => setMeasure(m => (m.on ? { on: false, pts: m.pts } : { on: true, pts: [] }))}><Ruler size={17} /></ToolButton>
             <ToolButton label={t('map.export')} onClick={exportGeo}><Download size={17} /></ToolButton>
             <ToolButton label={t('map.layers')} className="lg:hidden" onClick={() => { setTab('layers'); select(null, false); setSheet(true) }}><Layers3 size={17} /></ToolButton>
@@ -440,11 +477,9 @@ export function NetworkMap({ initialStation, initialLine }: { initialStation?: s
 
         {fallback && <div role="alert" className="absolute z-10 left-3 right-3 lg:right-auto lg:max-w-md bottom-24 lg:bottom-10 bg-warn-bg border border-[#ecd9ae] text-warn px-3 py-2 text-[13px]">{t('map.fallback')}</div>}
 
-        {coords && (
-          <div className="absolute z-[5] left-[10px] bottom-[92px] lg:left-[150px] lg:bottom-[10px] flex items-center gap-1.5 bg-white/90 border border-line px-2 h-[22px] text-[11px] font-mono" aria-live="off">
-            <Crosshair size={11} aria-hidden="true" />{coords[1].toFixed(5)}° N, {coords[0].toFixed(5)}° E
-          </div>
-        )}
+        <div className="absolute z-[5] left-[10px] bottom-[92px] lg:left-[150px] lg:bottom-[10px] flex items-center gap-1.5 bg-white/90 border border-line px-2 h-[22px] text-[11px] font-mono" aria-live="off">
+          <Crosshair size={11} aria-hidden="true" /><span ref={coordRef}>{'\u00a0'}</span>
+        </div>
 
         {/* bottom sheet on phones and tablets */}
         <section className={`lg:hidden absolute left-0 right-0 bottom-0 z-20 bg-white border-t border-line-strong shadow-[0_-2px_8px_rgba(0,0,0,0.08)] flex flex-col ${sheet ? 'h-[58%]' : 'h-[52px]'}`} aria-label={t('map.panel')}>
